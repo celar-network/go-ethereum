@@ -28,6 +28,29 @@ type OpCodeHooks interface {
 	CreateHook(evm *EVM, caller common.Address) error
 }
 
+// CreatedCodeHooks is an OPTIONAL extension to OpCodeHooks, consulted on the
+// code a contract creation produced, before that code is written to state.
+//
+// WHY A SEPARATE INTERFACE RATHER THAN A THIRD METHOD ON OpCodeHooks.
+// Adding a method to OpCodeHooks is a breaking change for every existing
+// implementation, including hooks types that assert against that interface in
+// downstream repositories. A consumer needing this check would then have to
+// fork those too. Detected by type assertion instead, so implementations that
+// do not want it are unaffected.
+//
+// WHY IT IS NEEDED. CreateHook runs BEFORE the opcode and receives only the
+// caller, so it can answer "may this account deploy" and cannot answer "is
+// this code permitted" - the code does not exist yet. A chain that admits
+// contracts by what their code IS, rather than by who deploys them, has no
+// point at which to make that decision. This is that point: the runtime code
+// exists, and the creation can still be failed.
+type CreatedCodeHooks interface {
+	// CreatedCodeHook is called with the runtime code a creation produced,
+	// after the constructor has run and before the code is written to state.
+	// A non-nil error fails the creation; the code is not written.
+	CreatedCodeHook(evm *EVM, address common.Address, code []byte) error
+}
+
 type NoopOpCodeHooks struct {
 }
 

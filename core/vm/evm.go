@@ -623,6 +623,21 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		return ret, ErrInvalidCode
 	}
 
+	// Consult the optional created-code hook, with the other code-validity
+	// checks and for the same reason: this is a question about the code the
+	// constructor produced, answerable only here.
+	//
+	// Placed after the checks above and before the code-storage gas charge
+	// because it is one of them. Gas semantics are the caller's, unchanged: a
+	// non-ErrExecutionReverted error reverts to the snapshot and consumes the
+	// remaining gas, so a refusal costs the constructor's gas and persists
+	// nothing - identical to a max-code-size failure.
+	if h, ok := evm.hooks.(CreatedCodeHooks); ok {
+		if err := h.CreatedCodeHook(evm, address, ret); err != nil {
+			return ret, err
+		}
+	}
+
 	if !evm.chainRules.IsEIP4762 {
 		createDataGas := uint64(len(ret)) * params.CreateDataGas
 		if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
